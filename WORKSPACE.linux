@@ -1,12 +1,16 @@
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:local.bzl", "local_repository")
 
-# ccv (with sm75/Turing support) is consumed as @ccv//lib:ccv. Pin it to the
-# fork's sm75-support branch (FP16 flash-attention fused kernels for RTX 2080Ti).
-git_repository(
+# ccv (with sm75/Turing support) is consumed as @ccv//lib:ccv. Built from the
+# fork's sm75-support branch (c945d9d, FP16 flash-attention fused kernels for
+# RTX 2080Ti). On the Linux build box this resolves to a LOCAL checkout
+# (~/ccv-local) because the box cannot reach github.com directly; on other
+# hosts, switch back to the git_repository pinned to
+# https://github.com/FullStackLeanrerLiu/ccv.git @ c945d9d.
+local_repository(
     name = "ccv",
-    commit = "c945d9ddf6047fc57ab19b45cafd177a51ecc0d2",
-    remote = "https://github.com/FullStackLeanrerLiu/ccv.git",
+    path = "../ccv-local",
 )
 
 # Keep this ahead of swift_rules_dependencies() so its fallback protobuf pin does not win.
