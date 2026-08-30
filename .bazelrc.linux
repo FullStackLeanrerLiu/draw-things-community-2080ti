@@ -2,6 +2,8 @@ common --enable_bzlmod=false
 
 common:cuda --crosstool_top=@local_config_cuda//crosstool:toolchain
 common:cuda --define=using_cuda=true --define=using_cuda_nvcc=true
+# sm75/Turing (RTX 2080Ti): compile the fused FP16 flash-attention forward path.
+common:cuda --define=enable_sm75=true
 
 common:cuda_clang --crosstool_top=@local_config_cuda//crosstool:toolchain
 common:cuda_clang --define=using_cuda=true --define=using_cuda_clang=true
