@@ -5,7 +5,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 # fork's sm75-support branch (FP16 flash-attention fused kernels for RTX 2080Ti).
 git_repository(
     name = "ccv",
-    commit = "0e3622f4a823652dda5dec389e396c828dea71c5",
+    commit = "c945d9ddf6047fc57ab19b45cafd177a51ecc0d2",
     remote = "https://github.com/FullStackLeanrerLiu/ccv.git",
 )
 
