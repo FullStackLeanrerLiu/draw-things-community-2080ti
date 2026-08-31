@@ -4,6 +4,10 @@ common:cuda --crosstool_top=@local_config_cuda//crosstool:toolchain
 common:cuda --define=using_cuda=true --define=using_cuda_nvcc=true
 # sm75/Turing (RTX 2080Ti): compile the fused FP16 flash-attention forward path.
 common:cuda --define=enable_sm75=true
+# SwiftNIO CNIO* C modules use Clang nullability attributes (_Nonnull/_Nullable). The
+# CUDA crosstool compiles plain C with the gcc backend, which does not define them;
+# define as empty macros so these C deps compile under the cuda toolchain.
+common:cuda --copt=-D_Nonnull= --copt=-D_Nullable= --copt=-D_Null_unspecified=
 
 common:cuda_clang --crosstool_top=@local_config_cuda//crosstool:toolchain
 common:cuda_clang --define=using_cuda=true --define=using_cuda_clang=true

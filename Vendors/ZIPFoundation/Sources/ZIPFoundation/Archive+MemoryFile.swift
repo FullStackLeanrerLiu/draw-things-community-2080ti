@@ -44,7 +44,7 @@ extension Archive {
         let result = fopencookie(cookie.toOpaque(), mode, stubs)
       #endif
       if append {
-        fseeko(result, 0, SEEK_END)
+        if let result { fseeko(result, 0, SEEK_END) }
       }
       return result
     }
