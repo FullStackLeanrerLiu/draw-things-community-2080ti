@@ -151,6 +151,29 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
     logger.info("ImageGenerationServiceImpl init")
   }
 
+  static private func stageLabel(for signpost: ImageGeneratorSignpost) -> String {
+    switch signpost {
+    case .textEncoded:
+      return "textEncoded"
+    case .imageEncoded, .controlsGenerated:
+      return "imageEncoded"
+    case .sampling(let step):
+      return "sampling(\(step))"
+    case .imageDecoded:
+      return "imageDecoded"
+    case .secondPassImageEncoded:
+      return "secondPassImageEncoded"
+    case .secondPassSampling(let step):
+      return "secondPassSampling(\(step))"
+    case .secondPassImageDecoded:
+      return "secondPassImageDecoded"
+    case .faceRestored:
+      return "faceRestored"
+    case .imageUpscaled:
+      return "imageUpscaled"
+    }
+  }
+
   static private func cancellationMonitoring(
     successFlag: ManagedAtomic<Bool>, logger: Logger, cancellationMonitor: CancellationMonitor
   ) {
@@ -324,6 +347,10 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
     logger.info(
       "Received image processing request with configuration steps: \(configuration.steps)"
     )
+    // --- PERF instrumentation: stage timing ---
+    let requestStart = Date()
+    let perf = PerfStageTracker()
+    // --- END PERF instrumentation ---
     let model = configuration.model ?? ""
     let sizeDescription = "\(configuration.startWidth * 64)x\(configuration.startHeight * 64)"
     let override = request.override
@@ -378,6 +405,12 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
           )
           return false
         }
+
+        // --- PERF instrumentation: log stage transitions with elapsed time ---
+        let now = Date()
+        let label = Self.stageLabel(for: signpost)
+        perf.report(label: label, now: now, logger: self.logger, requestStart: requestStart)
+        // --- END PERF instrumentation ---
 
         let update = ImageGenerationResponse.with {
           $0.currentSignpost = ImageGenerationSignpostProto(from: signpost)
@@ -479,10 +512,20 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
 
       successFlag.store(true, ordering: .releasing)
 
+      // --- PERF instrumentation: end of generate (sampling decoded) ---
+      let generateEnd = Date()
+      let encodeStart = Date()
+      // --- END PERF instrumentation ---
       let codec: DynamicGraph.Store.Codec = responseCompression ? [.zip, .fpzip] : []
       let imageDatas =
         images?.compactMap { $0.data(using: codec) } ?? []
       let audioData = audio?.compactMap { $0.data(using: codec) }
+      // --- PERF instrumentation ---
+      let encodeElapsed = Date().timeIntervalSince(encodeStart)
+      logger.info(
+        "[perf] generate+decode done: +\(String(format: "%.2f", generateEnd.timeIntervalSince(requestStart)))s total since request (includes model load if cold)")
+      logger.info(
+        "[perf] tensor->\(responseCompression ? "zip/fpzip" : "raw") encode: \(String(format: "%.2f", encodeElapsed))s, images=\(imageDatas.count)")
       logger.info(
         "Image processed, model:\(model), seed:\(configuration.seed), size:\(sizeDescription), steps:\(configuration.steps), sampler:\(configuration.sampler), imageTensors:\(images?.count ?? 0), imageData:\(imageDatas.count), audioTensors:\(audio?.count ?? 0), scaleFactor:\(scaleFactor)"
       )
@@ -920,3 +963,21 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
     return true
   }
 }
+
+// --- PERF instrumentation: boxes mutable stage-tracking state so the escaping
+// feedback closure can update it without Swift strict-concurrency var-capture diagnostics.
+private final class PerfStageTracker {
+  private var lastLabel = "request"
+  private var lastStart = Date()
+  init() {}
+  func report(label: String, now: Date, logger: Logging.Logger, requestStart: Date) {
+    guard label != lastLabel else { return }
+    let sinceRequest = now.timeIntervalSince(requestStart)
+    let sinceStage = now.timeIntervalSince(lastStart)
+    logger.info(
+      "[perf] stage '\(label)' reached: +\(String(format: "%.2f", sinceRequest))s total (+\(String(format: "%.2f", sinceStage))s after '\(lastLabel)')")
+    lastLabel = label
+    lastStart = now
+  }
+}
+// --- END PERF instrumentation ---
