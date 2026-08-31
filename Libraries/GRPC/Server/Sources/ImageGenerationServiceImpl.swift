@@ -969,8 +969,27 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
 private final class PerfStageTracker {
   private var lastLabel = "request"
   private var lastStart = Date()
+  private var samplingStart: Date? = nil
+  private var samplingStep = 0
   init() {}
   func report(label: String, now: Date, logger: Logging.Logger, requestStart: Date) {
+    // Track sampling progress to report guidance/sampling speed (it/s).
+    if label.hasPrefix("sampling(") {
+      if samplingStart == nil { samplingStart = now }
+      if let open = label.firstIndex(of: "("), let close = label.lastIndex(of: ")") {
+        if let step = Int(label[label.index(after: open)..<close]) {
+          samplingStep = max(samplingStep, step)
+        }
+      }
+    }
+    if label == "imageDecoded", let samplingStart = samplingStart, samplingStep >= 0 {
+      let steps = samplingStep + 1
+      let dur = now.timeIntervalSince(samplingStart)
+      if dur > 0 {
+        logger.info(
+          "[perf] sampling: \(steps) steps in \(String(format: "%.2f", dur))s -> \(String(format: "%.2f", Double(steps) / dur)) it/s; decode: \(String(format: "%.2f", now.timeIntervalSince(lastStart)))s")
+      }
+    }
     guard label != lastLabel else { return }
     let sinceRequest = now.timeIntervalSince(requestStart)
     let sinceStage = now.timeIntervalSince(lastStart)
