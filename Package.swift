@@ -27,7 +27,7 @@ let package = Package(
     .package(
       url: "https://github.com/liuliu/swift-sentencepiece",
       revision: "4c8baf1b03569428ab38dda7fdecf27886a16c1f"),
-    .package(url: "https://github.com/apple/swift-log.git", from: "1.4.4"),
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.5.4"),
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.1"),
     .package(url: "https://github.com/apple/swift-crypto.git", from: "3.7.1"),
     .package(url: "https://github.com/apple/swift-atomics.git", from: "1.2.0"),
