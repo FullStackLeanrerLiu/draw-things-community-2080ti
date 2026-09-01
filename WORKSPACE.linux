@@ -8,8 +8,7 @@ load("@bazel_tools//tools/build_defs/repo:local.bzl", "local_repository")
 # CUDA13 managed-memory API compat, cufileread GDS probe, and an fp16-SageAttention
 # tile variant (CCV_SEGA_MODE=fp16). Default SDPA path on Turing is standard
 # FP16 fused; INT8/INT4-QK are experimental, engaged only via CCV_QK_MODE).
-# Pulled directly from the fork via git_repository. The Linux build box reaches
-# github.com through a local http proxy (http://127.0.0.1:7897), see ~/.gitconfig.
+# Pulled directly from the fork via git_repository so the community can build.
 git_repository(
     name = "ccv",
     commit = "dce2574a",
@@ -109,7 +108,7 @@ apple_support_dependencies()
 git_repository(
     name = "rules_xcodeproj",
     commit = "b5265cf4c360a7607d82ab89e109d20f2a66188b",
-    remote = "file:///home/tom/gitmirror/rules_xcodeproj.git",
+    remote = "https://github.com/MobileNativeFoundation/rules_xcodeproj.git",
     shallow_since = "1753830850 -0500",
 )
 
@@ -127,7 +126,7 @@ bazel_features_deps()
 git_repository(
     name = "dflat",
     commit = "73925e51e4f44add842177a229f9990cb13711ff",
-    remote = "file:///home/tom/gitmirror/dflat.git",
+    remote = "https://github.com/liuliu/dflat.git",
     shallow_since = "1757626017 -0400",
 )
 
@@ -138,7 +137,7 @@ dflat_deps()
 git_repository(
     name = "s4nnc",
     commit = "40fba933eac7b34b967f97efeedc4b9697f963fe",
-    remote = "file:///home/tom/gitmirror/s4nnc.git",
+    remote = "https://github.com/liuliu/s4nnc.git",
     shallow_since = "1787598682 -0400",
 )
 
@@ -171,7 +170,7 @@ ccv_setting(
 git_repository(
     name = "swift-fickling",
     commit = "f86bc6b694b3167e6e5be0cb6f16e5c5ba85be63",
-    remote = "file:///home/tom/gitmirror/swift-fickling.git",
+    remote = "https://github.com/liuliu/swift-fickling.git",
     shallow_since = "1738984072 -0500",
 )
 
@@ -182,7 +181,7 @@ swift_fickling_deps()
 git_repository(
     name = "swift-sentencepiece",
     commit = "4c8baf1b03569428ab38dda7fdecf27886a16c1f",
-    remote = "file:///home/tom/gitmirror/swift-sentencepiece.git",
+    remote = "https://github.com/liuliu/swift-sentencepiece.git",
     shallow_since = "1785202705 -0400",
 )
 
@@ -194,7 +193,7 @@ new_git_repository(
     name = "SwiftNumerics",
     build_file = "swift-numerics.BUILD",
     commit = "1e5cbc4e2142677d6695036a748344c8edb83e5c",
-    remote = "file:///home/tom/gitmirror/SwiftNumerics.git",
+    remote = "https://github.com/apple/swift-numerics.git",
     shallow_since = "1630424082 -0400",
 )
 
@@ -202,7 +201,7 @@ new_git_repository(
     name = "SwiftAlgorithms",
     build_file = "swift-algorithms.BUILD",
     commit = "195e0316d7ba71e134d0f6c677f64b4db6160c46",
-    remote = "file:///home/tom/gitmirror/SwiftAlgorithms.git",
+    remote = "https://github.com/apple/swift-algorithms.git",
     shallow_since = "1645643239 -0600",
 )
 
@@ -210,7 +209,7 @@ new_git_repository(
     name = "SwiftPNG",
     build_file = "swift-png.BUILD",
     commit = "b6abadff7bc4cdc152c83e4be19304d2e6d88d66",
-    remote = "file:///home/tom/gitmirror/SwiftPNG.git",
+    remote = "https://github.com/kelvin13/swift-png",
     shallow_since = "1645648674 -0600",
 )
 
@@ -219,7 +218,7 @@ new_git_repository(
     name = "SwiftCollections",
     build_file = "swift-collections.BUILD",
     commit = "9bf03ff58ce34478e66aaee630e491823326fd06",
-    remote = "file:///home/tom/gitmirror/SwiftCollections.git",
+    remote = "https://github.com/apple/swift-collections.git",
     shallow_since = "1724118356 -0700",
 )
 
@@ -227,7 +226,7 @@ new_git_repository(
     name = "SwiftArgumentParser",
     build_file = "swift-argument-parser.BUILD",
     commit = "46989693916f56d1186bd59ac15124caef896560",
-    remote = "file:///home/tom/gitmirror/SwiftArgumentParser.git",
+    remote = "https://github.com/apple/swift-argument-parser.git",
     shallow_since = "1710612947 -0700",
 )
 
@@ -235,7 +234,7 @@ new_git_repository(
     name = "SwiftSystem",
     build_file = "swift-system.BUILD",
     commit = "fbd61a676d79cbde05cd4fda3cc46e94d6b8f0eb",
-    remote = "file:///home/tom/gitmirror/SwiftSystem.git",
+    remote = "https://github.com/apple/swift-system.git",
     shallow_since = "1729316385 -0700",
 )
 
@@ -243,7 +242,7 @@ new_git_repository(
     name = "SwiftProtobuf",
     build_file = "swift-protobuf.BUILD",
     commit = "d57a5aecf24a25b32ec4a74be2f5d0a995a47c4b",
-    remote = "file:///home/tom/gitmirror/SwiftProtobuf.git",
+    remote = "https://github.com/apple/swift-protobuf.git",
     shallow_since = "1720448759 -0400",
 )
 
@@ -254,14 +253,14 @@ new_git_repository(
     name = "SwiftLog",
     build_file = "swift-log.BUILD",
     commit = "e97a6fcb1ab07462881ac165fdbb37f067e205d5",
-    remote = "file:///home/tom/gitmirror/SwiftLog.git",
+    remote = "https://github.com/apple/swift-log.git",
 )
 
 new_git_repository(
     name = "SwiftCrypto",
     build_file = "swift-crypto.BUILD",
     commit = "81bee98e706aee68d39ed5996db069ef2b313d62",
-    remote = "file:///home/tom/gitmirror/SwiftCrypto.git",
+    remote = "https://github.com/apple/swift-crypto.git",
 )
 
 new_git_repository(
@@ -270,56 +269,56 @@ new_git_repository(
     commit = "e8dd756725e8800fcd0b3fd71ee6b4382d1e8fab",
     patch_args = ["-p1"],
     patches = ["//Vendors/OpenSSH:ios.patch"],
-    remote = "file:///home/tom/gitmirror/OpenSSH.git",
+    remote = "https://github.com/openssh/openssh-portable.git",
 )
 
 new_git_repository(
     name = "SwiftNIO",
     build_file = "swift-nio.BUILD",
     commit = "a16e2f54a25b2af217044e5168997009a505930f",
-    remote = "file:///home/tom/gitmirror/SwiftNIO.git",
+    remote = "https://github.com/apple/swift-nio.git",
 )
 
 new_git_repository(
     name = "SwiftNIOExtras",
     build_file = "swift-nio-extras.BUILD",
     commit = "b4dbfacff47fb8d0f9e0a422d8d37935a9f10570",
-    remote = "file:///home/tom/gitmirror/SwiftNIOExtras.git",
+    remote = "https://github.com/apple/swift-nio-extras.git",
 )
 
 new_git_repository(
     name = "SwiftNIOHTTP2",
     build_file = "swift-nio-http2.BUILD",
     commit = "6d021a48483dbb273a9be43f65234bdc9185b364",
-    remote = "file:///home/tom/gitmirror/SwiftNIOHTTP2.git",
+    remote = "https://github.com/apple/swift-nio-http2.git",
 )
 
 new_git_repository(
     name = "SwiftNIOSSL",
     build_file = "swift-nio-ssl.BUILD",
     commit = "9d0d5d8798a576fbf674a823734e65e15ca5f2ec",
-    remote = "file:///home/tom/gitmirror/SwiftNIOSSL.git",
+    remote = "https://github.com/apple/swift-nio-ssl.git",
 )
 
 new_git_repository(
     name = "SwiftNIOTransportService",
     build_file = "swift-nio-transport-services.BUILD",
     commit = "c0d9a144cfaec8d3d596aadde3039286a266c15c",
-    remote = "file:///home/tom/gitmirror/SwiftNIOTransportService.git",
+    remote = "https://github.com/apple/swift-nio-transport-services.git",
 )
 
 new_git_repository(
     name = "grpc-swift",
     build_file = "grpc-swift.BUILD",
     commit = "4ab02e1ae5b4dfdd723773e955b62f35ccbaa7c7",
-    remote = "file:///home/tom/gitmirror/grpc-swift.git",
+    remote = "https://github.com/grpc/grpc-swift.git",
 )
 
 new_git_repository(
     name = "SwiftToolsSupportCore",
     build_file = "swift-tools-support-core.BUILD",
     commit = "930e82e5ae2432c71fe05f440b5d778285270bdb",
-    remote = "file:///home/tom/gitmirror/SwiftToolsSupportCore.git",
+    remote = "https://github.com/apple/swift-tools-support-core.git",
     shallow_since = "1708729686 -0800",
 )
 
@@ -327,7 +326,7 @@ new_git_repository(
     name = "SwiftSyntax",
     build_file = "swift-syntax.BUILD",
     commit = "fa8f95c2d536d6620cc2f504ebe8a6167c9fc2dd",
-    remote = "file:///home/tom/gitmirror/SwiftSyntax.git",
+    remote = "https://github.com/apple/swift-syntax.git",
     shallow_since = "1709941517 -0800",
 )
 
@@ -335,7 +334,7 @@ new_git_repository(
     name = "SwiftCMark",
     build_file = "swift-cmark.BUILD",
     commit = "3bc2f3e25df0cecc5dc269f7ccae65d0f386f06a",
-    remote = "file:///home/tom/gitmirror/SwiftCMark.git",
+    remote = "https://github.com/apple/swift-cmark.git",
     shallow_since = "1690895253 +0200",
 )
 
@@ -343,7 +342,7 @@ new_git_repository(
     name = "SwiftMarkdown",
     build_file = "swift-markdown.BUILD",
     commit = "907674c2ae2d24c32fba50101821b1a7fdd291e2",
-    remote = "file:///home/tom/gitmirror/SwiftMarkdown.git",
+    remote = "https://github.com/apple/swift-markdown.git",
     shallow_since = "1708535643 -0800",
 )
 
@@ -351,7 +350,7 @@ new_git_repository(
     name = "SwiftFormat",
     build_file = "swift-format.BUILD",
     commit = "3191b8f3109730af449c6332d0b1ca6653b857a0",
-    remote = "file:///home/tom/gitmirror/SwiftFormat.git",
+    remote = "https://github.com/apple/swift-format.git",
     shallow_since = "1710847777 +0100",
 )
 
@@ -359,7 +358,7 @@ new_git_repository(
     name = "SwiftGuaka",
     build_file = "swift-guaka.BUILD",
     commit = "e52eb523b152e04fa5dff56bed01e805062ce0ff",
-    remote = "file:///home/tom/gitmirror/SwiftGuaka.git",
+    remote = "https://github.com/nsomar/Guaka",
     shallow_since = "1570439330 +0900",
 )
 
@@ -367,7 +366,7 @@ new_git_repository(
     name = "SwiftStringScanner",
     build_file = "swift-string-scanner.BUILD",
     commit = "de1685ad202cb586d626ed52d6de904dd34189f3",
-    remote = "file:///home/tom/gitmirror/SwiftStringScanner.git",
+    remote = "https://github.com/getGuaka/StringScanner",
     shallow_since = "1558131110 +0900",
 )
 
@@ -375,7 +374,7 @@ new_git_repository(
     name = "cpp-httplib",
     build_file = "cpp-httplib.BUILD",
     commit = "bd9612b81e6f39ab24a4be52fcda93658c0ca2dc",
-    remote = "file:///home/tom/gitmirror/cpp-httplib.git",
+    remote = "https://github.com/yhirose/cpp-httplib",
     shallow_since = "1686982714 -0400",
 )
 
@@ -383,7 +382,7 @@ new_git_repository(
     name = "swift-log-datadog",
     build_file = "swift-log-datadog.BUILD",
     commit = "e47aa092908764bdd625bb18d72e4db5bf9d7c4e",
-    remote = "file:///home/tom/gitmirror/swift-log-datadog.git",
+    remote = "https://github.com/jagreenwood/swift-log-datadog",
     shallow_since = "1643657017 -0500",
 )
 
@@ -393,7 +392,7 @@ new_git_repository(
     name = "Lottie",
     build_file = "lottie.BUILD",
     commit = "a004050748dc197c56256a14dca49a035d74726c",
-    remote = "file:///home/tom/gitmirror/Lottie.git",
+    remote = "https://github.com/airbnb/lottie-ios.git",
     shallow_since = "1748373972 -0700",
 )
 
@@ -401,7 +400,7 @@ new_git_repository(
     name = "Yams",
     build_file = "yams.BUILD",
     commit = "948991e19e795cdd7bd310756a97b5fbda559535",
-    remote = "file:///home/tom/gitmirror/Yams.git",
+    remote = "https://github.com/jpsim/Yams.git",
     shallow_since = "1682361496 -0400",
 )
 
@@ -409,7 +408,7 @@ new_git_repository(
     name = "SwiftJMESPath",
     build_file = "swift-JMESPath.BUILD",
     commit = "c722898bdfc72cdeb4a8431812fdeec0b56e8e1d",
-    remote = "file:///home/tom/gitmirror/SwiftJMESPath.git",
+    remote = "https://github.com/adam-fowler/jmespath.swift.git",
     shallow_since = "1734034260 +0000",
 )
 
