@@ -3,15 +3,16 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:local.bzl", "local_repository")
 
 # ccv (with sm75/Turing support) is consumed as @ccv//lib:ccv. Built from the
-# fork's sm75-support branch (c17e51018, FP16 fused flash-attention kernels +
+# fork's sm75-support branch (dce2574a, FP16 fused flash-attention kernels +
 # SageAttention-style INT8-QK / INT4-QK fused forward kernels for RTX 2080Ti,
-# CUDA13 managed-memory API compat, cufileread GDS probe, and default INT8-QK
-# on Turing fp16 fused attention so drawthings's SDPA path actually uses it).
+# CUDA13 managed-memory API compat, cufileread GDS probe, and an fp16-SageAttention
+# tile variant (CCV_SEGA_MODE=fp16). Default SDPA path on Turing is standard
+# FP16 fused; INT8/INT4-QK are experimental, engaged only via CCV_QK_MODE).
 # Pulled directly from the fork via git_repository. The Linux build box reaches
 # github.com through a local http proxy (http://127.0.0.1:7897), see ~/.gitconfig.
 git_repository(
     name = "ccv",
-    commit = "c17e51018ec893173620c7888229b6eee225f18e",
+    commit = "dce2574a",
     remote = "https://github.com/FullStackLeanrerLiu/ccv.git",
 )
 
