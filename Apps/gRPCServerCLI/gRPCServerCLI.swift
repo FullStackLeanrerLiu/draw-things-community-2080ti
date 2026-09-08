@@ -483,13 +483,29 @@ struct gRPCServerCLI: ParsableCommand {
     if gpu > 0 && gpu < DeviceKind.GPUs.count {
       DeviceKind.GPUs.permute(gpu)
     }
+    // The weights cache stores decompressed weights in host RAM (dGPU path). It only takes effect when
+    // its size is > 0 (WeightsCache.attach bails out otherwise). With --cpu-offload set, text/UNet
+    // weights are loaded external-on-demand (memoryCapacity != .high), so without a non-zero cache every
+    // request re-reads and re-decompresses them from disk -- this dominates text encode latency for large
+    // text encoders (e.g. Qwen2.5-VL 7B). When the user did not opt in via --weights-cache, pick a
+    // sensible default from physical RAM so decompressed weights stay resident across requests (the cache
+    // evicts smallest-first when over quota).
+    var effectiveWeightsCache = weightsCache
     if cpuOffload {
       DeviceCapability.memoryCapacity = .medium  // This will trigger logic to offload some weights to CPU during inference.
+      if effectiveWeightsCache == 0 {
+        let physicalGiB = Double(ProcessInfo.processInfo.physicalMemory) / Double(1_024 * 1_024 * 1_024)
+        effectiveWeightsCache = max(0, Int(min(min(physicalGiB * 0.5, max(0, physicalGiB - 8)), 40)))
+        print(
+          "CPU offload without --weights-cache: auto-enabling a \(effectiveWeightsCache) GiB weights cache "
+            + "for a \(physicalGiB) GiB machine so decompressed weights stay resident across requests.")
+      }
     }
     if freadPreferred {
       DeviceCapability.isFreadPreferred = true  // This will not do mmap but use fread when needed.
     }
-    DeviceCapability.maxTotalWeightsCacheSize = UInt64(weightsCache) * 1_024 * 1_024 * 1_024
+    DeviceCapability.maxTotalWeightsCacheSize =
+      UInt64(effectiveWeightsCache) * 1_024 * 1_024 * 1_024
     try self.runAndBlock(
       name: name, address: address, port: port, TLS: !noTLS,
       serverLoRALoader: serverLoRALoader)
