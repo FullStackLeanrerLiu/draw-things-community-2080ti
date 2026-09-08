@@ -733,7 +733,7 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
       $0.sharedSecretMissing = false
       $0.message = "HELLO \(request.name)"
       if enableModelBrowsing {
-        // Looking for ckpt files.
+        // Looking for model files (official .ckpt / non-official .safetensors etc.).
         let internalFilePath = ModelZoo.internalFilePathForModelDownloaded("")
         let fileManager = FileManager.default
         var fileUrls = [URL]()
@@ -750,12 +750,16 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
         {
           fileUrls.append(contentsOf: urls)
         }
-        // Check if the file ends with ckpt. If it is, this is a file we need to fill.
+        // Check if the file ends with a supported model extension. If it is, this is a file we need to fill.
         $0.files = fileUrls.compactMap {
           guard let values = try? $0.resourceValues(forKeys: [.fileSizeKey]) else { return nil }
           guard let fileSize = values.fileSize, fileSize > 0 else { return nil }
           let file = $0.lastPathComponent
-          guard file.lowercased().hasSuffix(".ckpt") else { return nil }
+          let fileExtension = file.lowercased()
+          guard
+            fileExtension.hasSuffix(".ckpt") || fileExtension.hasSuffix(".safetensors")
+              || fileExtension.hasSuffix(".bin")
+          else { return nil }
           return file
         }
         // Load all specifications that is available locally into override JSON payload.

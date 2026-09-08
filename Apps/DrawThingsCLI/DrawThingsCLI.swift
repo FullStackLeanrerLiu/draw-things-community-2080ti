@@ -3884,6 +3884,9 @@ struct DrawThingsCLI: ParsableCommand {
     discussion: CLIHelpText.root,
     version: CLIIdentity.version,
     subcommands: [Generate.self, Auth.self, Models.self, Train.self, Completion.self]
+      #if os(macOS) || os(iOS)
+      + [Servers.self]
+      #endif
   )
 }
 
@@ -4766,6 +4769,56 @@ extension DrawThingsCLI {
       }
     }
   }
+
+  #if os(macOS) || os(iOS)
+    /// Discover gRPC image-generation servers broadcast over Bonjour.
+    struct Servers: ParsableCommand {
+      static let configuration = CommandConfiguration(
+        abstract: "Discover gRPC image-generation servers on the local network.",
+        discussion:
+          "Scans for Draw Things gRPC servers advertised over Bonjour (_dt-grpc._tcp) and prints their host, port and TLS mode."
+      )
+
+      @Option(
+        name: .shortAndLong,
+        help: "Seconds to keep listening for service broadcasts before exiting.")
+      var timeout: TimeInterval = 3.0
+
+      func run() throws {
+        final class DiscoveryDelegate: GRPCServiceBrowserDelegate {
+          var found = [GRPCServiceBrowser.ServiceDescriptor]()
+
+          func didFindService(_ descriptor: GRPCServiceBrowser.ServiceDescriptor) {
+            found.append(descriptor)
+          }
+
+          func didRemoveService(_ descriptor: GRPCServiceBrowser.ServiceDescriptor) {
+            found.removeAll { $0 == descriptor }
+          }
+        }
+
+        let delegate = DiscoveryDelegate()
+        let browser = GRPCServiceBrowser()
+        browser.delegate = delegate
+
+        print("Listening for gRPC servers (_dt-grpc._tcp) for \(timeout)s...")
+        let endDate = Date().addingTimeInterval(timeout)
+        while Date() < endDate {
+          RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+
+        guard !delegate.found.isEmpty else {
+          print("No gRPC servers found on the local network.")
+          return
+        }
+        for descriptor in delegate.found {
+          let tls = descriptor.TLS.map { $0 ? "true" : "false" } ?? "unknown"
+          print(
+            "\(descriptor.name) — host: \(descriptor.host), port: \(descriptor.port), tls: \(tls)")
+        }
+      }
+    }
+  #endif
 }
 
 private func mergedAlias(
