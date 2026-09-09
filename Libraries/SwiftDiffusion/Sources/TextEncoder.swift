@@ -4,6 +4,10 @@ import Foundation
 import NNC
 import WeightsCache
 
+// 进程级 Qwen2VL 已编译模型缓存（按结构签名命中复用）。
+// 服务端单线程串行处理，天然无并发竞争；缓存保留编译好的模型结构，权重按需回载。
+private var expiringQwenTextModelCache: [String: Model] = [:]
+
 #if canImport(C_ccv)
   import C_ccv
 #elseif canImport(C_swiftpm_ccv)
@@ -43,10 +47,7 @@ public struct TextEncoder<FloatType: TensorNumeric & BinaryFloatingPoint> {
     self.lora = lora.filter { $0.version == version }
   }
 
-  // 进程级 Qwen2VL 已编译模型缓存（按结构签名命中复用）。
-  // 服务端单线程串行处理，天然无并发竞争；缓存保留编译好的模型结构，权重按需回载。
-  fileprivate static var expiringQwenTextModelCache: [String: Model] = [:]
-}
+  }
 
 extension TextEncoder {
   private func encodeHiDreamO1(
@@ -2226,7 +2227,7 @@ extension TextEncoder {
     let structuralSignature =
       "\(filePaths[0])|\(tokenLength)|\(!injectedEmbeddings.isEmpty)|\(usesFlashAttention)"
     let textModel: Model
-    if let cachedModel = TextEncoder.expiringQwenTextModelCache[structuralSignature] {
+    if let cachedModel = expiringQwenTextModelCache[structuralSignature] {
       textModel = cachedModel
     } else {
       let compiledModel = Qwen2VL(
@@ -2236,7 +2237,7 @@ extension TextEncoder {
         batchSize: 2, usesFlashAttention: usesFlashAttention)
       compiledModel.compile(
         inputs: [tokensTensorGPU, rotaryTensorGPU, causalAttentionMaskGPU] + injectedEmbeddings)
-      TextEncoder.expiringQwenTextModelCache[structuralSignature] = compiledModel
+      expiringQwenTextModelCache[structuralSignature] = compiledModel
       textModel = compiledModel
     }
     if !weightsCache.detach(filePaths[0], to: textModel.parameters) {
