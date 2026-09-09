@@ -5130,19 +5130,6 @@ extension LocalImageGenerator {
     let isSeedVR2DownscaleEnabled =
       (modelVersion == .seedvr2_3b || modelVersion == .seedvr2_7b) && imageScaleFactor == 1
       && modifier != .editing
-    var workingImage: DynamicGraph.Tensor<FloatType> = image
-    if isSeedVR2DownscaleEnabled {
-      let originalWidth = image.shape[2]
-      let originalHeight = image.shape[1]
-      var destWidth = max(384, min(512, Int((Double(originalWidth) / 4).rounded())))
-      destWidth = destWidth - destWidth % (64 * imageScaleFactor)
-      var destHeight = Int((Double(originalHeight) * Double(destWidth) / Double(originalWidth)).rounded())
-      destHeight = destHeight - destHeight % (64 * imageScaleFactor)
-      workingImage = Upsample(
-        .bilinear, widthScale: Float(destWidth) / Float(originalWidth),
-        heightScale: Float(destHeight) / Float(originalHeight))(
-        image)
-    }
     let (
       qkNorm, dualAttentionLayers, distilledGuidanceLayers, activationQkScaling,
       activationProjScaling, activationFfnProjUpScaling,
@@ -5589,6 +5576,24 @@ extension LocalImageGenerator {
         maxLength: tokenLength, clipSkip: clipSkip, lora: lora)
       let image = downscaleImageAndToGPU(
         graph.variable(image), scaleFactor: imageScaleFactor)
+      // SeedVR2-as-upscaler: the working condition is a small intermediate image (width down to
+      // ~1/4, clamped to [384,512], height scaled to keep aspect, both aligned to 64). It is
+      // encoded, then its latent is upsampled back to the result-size latent for the DiT.
+      let workingImage: DynamicGraph.Tensor<FloatType>
+      if isSeedVR2DownscaleEnabled {
+        let originalWidth = image.shape[2]
+        let originalHeight = image.shape[1]
+        var destWidth = max(384, min(512, Int((Double(originalWidth) / 4).rounded())))
+        destWidth = destWidth - destWidth % (64 * imageScaleFactor)
+        var destHeight =
+          Int((Double(originalHeight) * Double(destWidth) / Double(originalWidth)).rounded())
+        destHeight = destHeight - destHeight % (64 * imageScaleFactor)
+        workingImage = Upsample(
+          .bilinear, widthScale: Float(destWidth) / Float(originalWidth),
+          heightScale: Float(destHeight) / Float(originalHeight))(image)
+      } else {
+        workingImage = image
+      }
       let textImages: [DynamicGraph.Tensor<FloatType>]
       if modifier == .kontext || modifier == .kontextKv || modifier == .qwenimageEditPlus
         || modifier == .qwenimageEdit2511
