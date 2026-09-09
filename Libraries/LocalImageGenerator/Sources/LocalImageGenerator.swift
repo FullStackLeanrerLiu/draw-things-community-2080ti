@@ -5119,6 +5119,30 @@ extension LocalImageGenerator {
       file, LoRAs: configuration.loras.compactMap(\.file))
     let colorCalibrationReference = image
     let modelVersion = ModelZoo.versionForModel(file)
+    // SeedVR2 as the primary (master) model runs as an imaging-to-image (modifier == .inpainting)
+    // full-frame restoration model. When used as an upscaler, diffusion runs on the *result*-size
+    // latent (startWidth = input/8) so the decoded output IS the exact requested result resolution
+    // with no post-hoc upscale. A small "intermediate" working image feeds the restoration
+    // condition: its size is derived from the result size (width down to ~1/4 and clamped to
+    // [384,512], height scaled to keep aspect, both aligned to 64). Its latent is upsampled back to
+    // the result-size latent so the DiT reconstructs detail at full resolution. Only active at
+    // imageScaleFactor == 1, and skipped for editing (local-edit) modifiers.
+    let isSeedVR2DownscaleEnabled =
+      (modelVersion == .seedvr2_3b || modelVersion == .seedvr2_7b) && imageScaleFactor == 1
+      && modifier != .editing
+    var workingImage = image
+    if isSeedVR2DownscaleEnabled {
+      let originalWidth = image.shape[2]
+      let originalHeight = image.shape[1]
+      var destWidth = max(384, min(512, Int((Double(originalWidth) / 4).rounded())))
+      destWidth = destWidth - destWidth % (64 * imageScaleFactor)
+      var destHeight = Int((Double(originalHeight) * Double(destWidth) / Double(originalWidth)).rounded())
+      destHeight = destHeight - destHeight % (64 * imageScaleFactor)
+      workingImage = Upsample(
+        .bilinear, widthScale: Float(destWidth) / Float(originalWidth),
+        heightScale: Float(destHeight) / Float(originalHeight))(
+        image)
+    }
     let (
       qkNorm, dualAttentionLayers, distilledGuidanceLayers, activationQkScaling,
       activationProjScaling, activationFfnProjUpScaling,
@@ -5405,6 +5429,9 @@ extension LocalImageGenerator {
     precondition(batchSize > 0)
     precondition(strength >= 0 && strength <= 1)
     let highPrecisionForAutoencoder = ModelZoo.isHighPrecisionAutoencoderForModel(file)
+    // The output resolution (and thus the sampled latent) is sized from the requested result
+    // `image`; the intermediate working image only drives the restoration condition and is already
+    // 64-aligned by construction above.
     precondition(image.shape[2] % (64 * imageScaleFactor) == 0)
     precondition(image.shape[1] % (64 * imageScaleFactor) == 0)
     let startWidth: Int
@@ -5640,7 +5667,7 @@ extension LocalImageGenerator {
           firstPassImage = image
         }
       } else {
-        firstPassImage = image
+        firstPassImage = workingImage
       }
       var batchSize = (batchSize, 0)
       switch modelVersion {
@@ -5671,13 +5698,30 @@ extension LocalImageGenerator {
       var maskedImage: DynamicGraph.Tensor<FloatType>? = nil
       var mask: DynamicGraph.Tensor<FloatType>? = nil
       if modifier == .inpainting || modifier == .editing || modelVersion == .svdI2v {
-        let encodedImage: DynamicGraph.Tensor<FloatType>
+        var encodedImage: DynamicGraph.Tensor<FloatType>
         (sample, encodedImage) = modelPreloader.consumeFirstStageSample(
           firstStage.sample(
             firstPassImage,
             encoder: modelPreloader.retrieveFirstStageEncoder(
               firstStage: firstStage, scale: imageScale), cancellation: cancellation),
           firstStage: firstStage, scale: imageScale)
+        // SeedVR2-as-upscaler: the working condition is a small intermediate image. Diffusion runs
+        // at the result-size latent (startHeight/startWidth), so upscale the condition latent to
+        // that size before it is sliced into maskedImage and combined into x_T.
+        if isSeedVR2DownscaleEnabled {
+          let sShape = sample.shape
+          if sShape[1] != startHeight || sShape[2] != startWidth {
+            sample = Upsample(
+              .bilinear, widthScale: Float(startWidth) / Float(sShape[2]),
+              heightScale: Float(startHeight) / Float(sShape[1]))(sample)
+          }
+          let eShape = encodedImage.shape
+          if eShape[1] != startHeight || eShape[2] != startWidth {
+            encodedImage = Upsample(
+              .bilinear, widthScale: Float(startWidth) / Float(eShape[2]),
+              heightScale: Float(startHeight) / Float(eShape[1]))(encodedImage)
+          }
+        }
         if modifier == .inpainting {
           maskedImage = firstStage.scale(
             encodedImage[0..<imageSize, 0..<startHeight, 0..<startWidth, 0..<channels].copied())
@@ -6011,6 +6055,9 @@ extension LocalImageGenerator {
       if signposts.contains(.faceRestored) {
         guard feedback(.faceRestored, signposts, nil) else { return (nil, nil, 1) }
       }
+      // SeedVR2 master chain: diffusion runs at the result-size latent (startWidth/startHeight come
+      // from `image`), so the decode output is already the exact requested resolution. No post-hoc
+      // upscale is applied here; any optional external upscaler runs next.
       let (result, scaleFactor) = upscaleImageAndToCPU(
         firstStageResult.0, configuration: configuration,
         colorCalibrationReference: colorCalibrationReference,

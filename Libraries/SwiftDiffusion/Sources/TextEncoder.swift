@@ -42,6 +42,10 @@ public struct TextEncoder<FloatType: TensorNumeric & BinaryFloatingPoint> {
     self.clipSkip = clipSkip
     self.lora = lora.filter { $0.version == version }
   }
+
+  // 进程级 Qwen2VL 已编译模型缓存（按结构签名命中复用）。
+  // 服务端单线程串行处理，天然无并发竞争；缓存保留编译好的模型结构，权重按需回载。
+  fileprivate static var expiringQwenTextModelCache: [String: Model] = [:]
 }
 
 extension TextEncoder {
@@ -2199,11 +2203,6 @@ extension TextEncoder {
         injectedEmbeddings.append(contentsOf: [graph.variable(mask.toGPU(0)), embeddings])
       }
     }
-    let textModel = Qwen2VL(
-      FloatType.self, injectEmbeddings: !injectedEmbeddings.isEmpty, vocabularySize: 152_064,
-      maxLength: tokenLength, width: 3_584,
-      tokenLength: tokenLength, layers: 28, MLP: 18_944, heads: 28, outputHiddenStates: 28,
-      batchSize: 2, usesFlashAttention: usesFlashAttention)
     var causalAttentionMask = Tensor<FloatType>(
       Array(repeating: 0, count: tokenLength * tokenLength), .CPU,
       .NHWC(1, 1, tokenLength, tokenLength)
@@ -2220,8 +2219,26 @@ extension TextEncoder {
         of: FloatType.self
       ).toGPU(0))
     let causalAttentionMaskGPU = graph.variable(causalAttentionMask.toGPU(0))
-    textModel.compile(
-      inputs: [tokensTensorGPU, rotaryTensorGPU, causalAttentionMaskGPU] + injectedEmbeddings)
+    // Qwen2VL 编译结构只依赖 tokenLength / injectEmbeddings / usesFlashAttention / filePaths。
+    // 在注入图与提示词完全一致（最终 tokenLength 相同）时复用已编译模型，省掉 7B 结构的重复编译。
+    // 服务端单线程串行处理请求，进程级静态缓存无并发竞争。权重仍走 weightsCache.detach 回载，
+    // 避免把整份 fp16 权重一次性 attach 进显存（不撑爆 11GB 显存）。
+    let structuralSignature =
+      "\(filePaths[0])|\(tokenLength)|\(!injectedEmbeddings.isEmpty)|\(usesFlashAttention)"
+    let textModel: Model
+    if let cachedModel = TextEncoder.expiringQwenTextModelCache[structuralSignature] {
+      textModel = cachedModel
+    } else {
+      let compiledModel = Qwen2VL(
+        FloatType.self, injectEmbeddings: !injectedEmbeddings.isEmpty, vocabularySize: 152_064,
+        maxLength: tokenLength, width: 3_584,
+        tokenLength: tokenLength, layers: 28, MLP: 18_944, heads: 28, outputHiddenStates: 28,
+        batchSize: 2, usesFlashAttention: usesFlashAttention)
+      compiledModel.compile(
+        inputs: [tokensTensorGPU, rotaryTensorGPU, causalAttentionMaskGPU] + injectedEmbeddings)
+      TextEncoder.expiringQwenTextModelCache[structuralSignature] = compiledModel
+      textModel = compiledModel
+    }
     if !weightsCache.detach(filePaths[0], to: textModel.parameters) {
       // If we have more than 24GiB RAM, and not forced to be on demand. We load the whole thing (better for weights cache).
       // Move Qwen 2.5 VL to on-demand.
