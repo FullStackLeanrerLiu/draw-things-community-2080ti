@@ -5130,7 +5130,7 @@ extension LocalImageGenerator {
     let isSeedVR2DownscaleEnabled =
       (modelVersion == .seedvr2_3b || modelVersion == .seedvr2_7b) && imageScaleFactor == 1
       && modifier != .editing
-    var workingImage = image
+    var workingImage: DynamicGraph.Tensor<FloatType> = image
     if isSeedVR2DownscaleEnabled {
       let originalWidth = image.shape[2]
       let originalHeight = image.shape[1]
