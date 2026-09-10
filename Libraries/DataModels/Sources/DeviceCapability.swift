@@ -199,11 +199,14 @@ public struct DeviceCapability {
     #endif
   }()
   public static let isMFAEnabled = ManagedAtomic(isMFASupported ? 1 : 0)
-  // SeedVR2 as a master upscaler downsamples the input to ~H/4×W/4 (width clamped to [384,512]),
-  // generates at that intermediate latent, then upscales back to the result resolution. On some
-  // pipelines this reconstructed detail can look broken, so expose a runtime toggle to disable
-  // the downscale step (falling back to processing the input at its native resolution).
+  // SeedVR2 as a master upscaler downsamples the input to ~H/4×W/4 (width clamped to a target
+  // width below, height scaled to keep aspect), generates at that intermediate latent, then
+  // upscales back to the result resolution. On some pipelines this reconstructed detail can look
+  // broken, so expose a runtime toggle to disable the downscale step (falling back to processing
+  // the input at its native resolution). seedVR2DownscaleWidth is that target clamp width; set it
+  // to 0 to disable the downscale entirely (same as isSeedVR2DownscaleEnabled == false.
   public static var isSeedVR2DownscaleEnabled = true
+  public static var seedVR2DownscaleWidth = 384
   public static let isMFAAppleNeuralEngineEnabled = ManagedAtomic(isMFAAppleNeuralEngineFaster)
   public struct Scale: Equatable & Hashable & CustomDebugStringConvertible {
     public let widthScale: UInt16

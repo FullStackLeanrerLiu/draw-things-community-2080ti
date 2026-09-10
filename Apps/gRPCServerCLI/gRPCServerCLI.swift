@@ -309,8 +309,16 @@ struct gRPCServerCLI: ParsableCommand {
   @Flag(help: "Disable FlashAttention.")
   var noFlashAttention = false
 
-  @Flag(name: .customLong("no-seedvr2-downscale"), help: "Disable the SeedVR2 downscale-to-384 step when SeedVR2 is used as a master upscaler.")
+  @Flag(name: .customLong("no-seedvr2-downscale"), help: "Disable the SeedVR2 downscale step when SeedVR2 is used as a master upscaler.")
   var noSeedVR2Downscale = false
+
+  @Option(
+    name: .customLong("seedvr2-downscale-width"),
+    help:
+      "Target clamp width (pixels) for the SeedVR2 downscale step (e.g. 384/512/768/custom); "
+        + "0 disables the downscale. Under 16-GiB GPUs raise this to keep detail at the cost of VRAM."
+  )
+  var seedVR2DownscaleWidth: Int = 384
 
   @Option(name: .shortAndLong, help: "The weights cache size in GiB.")
   var weightsCache: Int = 0
@@ -486,6 +494,7 @@ struct gRPCServerCLI: ParsableCommand {
     if noSeedVR2Downscale {
       DeviceCapability.isSeedVR2DownscaleEnabled = false
     }
+    DeviceCapability.seedVR2DownscaleWidth = seedVR2DownscaleWidth
     if gpu > 0 && gpu < DeviceKind.GPUs.count {
       DeviceKind.GPUs.permute(gpu)
     }

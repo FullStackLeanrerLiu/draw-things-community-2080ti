@@ -5577,14 +5577,19 @@ extension LocalImageGenerator {
         maxLength: tokenLength, clipSkip: clipSkip, lora: lora)
       let image = downscaleImageAndToGPU(
         graph.variable(image), scaleFactor: imageScaleFactor)
-      // SeedVR2-as-upscaler: the working condition is a small intermediate image (width down to
-      // ~1/4, clamped to [384,512], height scaled to keep aspect, both aligned to 64). It is
-      // encoded, then its latent is upsampled back to the result-size latent for the DiT.
+      // SeedVR2-as-upscaler: the working condition is a small intermediate image (width the 1/4
+      // downscale, floored to the configured target width, height scaled to keep aspect, both
+      // aligned to 64). It is encoded, then its latent is upsampled back to the result-size
+      // latent for the DiT.
       let workingImage: DynamicGraph.Tensor<FloatType>
-      if isSeedVR2DownscaleEnabled {
+      if isSeedVR2DownscaleEnabled && DeviceCapability.seedVR2DownscaleWidth > 0 {
         let originalWidth = image.shape[2]
         let originalHeight = image.shape[1]
-        var destWidth = max(384, min(512, Int((Double(originalWidth) / 4).rounded())))
+        let targetWidth = DeviceCapability.seedVR2DownscaleWidth
+        // The 1/4 intermediate is floored to the configured target width (default 384) so small
+        // inputs don't lose too much detail; operators can raise it (e.g. 512/768/custom) to keep
+        // more spatial detail at the cost of higher peak VRAM.
+        var destWidth = max(targetWidth, Int((Double(originalWidth) / 4).rounded()))
         destWidth = destWidth - destWidth % (64 * imageScaleFactor)
         var destHeight =
           Int((Double(originalHeight) * Double(destWidth) / Double(originalWidth)).rounded())

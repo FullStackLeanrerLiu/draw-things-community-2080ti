@@ -179,10 +179,14 @@ For RTX 20xx graphics cards, you need to disable FlashAttention:
 docker run -v /[Your local path to store models]:/grpc-models -p 7859:7859 --gpus all drawthingsai/draw-things-grpc-server-cli:latest gRPCServerCLI /grpc-models --no-flash-attention
 ```
 
-When SeedVR2 (`seedvr2_3b` / `seedvr2_7b`) is used as a master upscaler, the server downsamples the input to ~height/4×width/4 (width clamped to [384,512]) before generation, then upscales the latent back to the full result resolution. On some pipelines this reconstructed detail can come out broken. If you see corrupted output, disable the downscale step so the input is processed at its native resolution:
+When SeedVR2 (`seedvr2_3b` / `seedvr2_7b`) is used as a master upscaler, the server downsamples the input to ~height/4×width/4 before generation, then upscales the latent back to the full result resolution. The intermediate width is floored to a target clamp width (default 384) so small inputs don't lose too much detail; on 16-GiB+ GPUs you can raise it with `--seedvr2-downscale-width` (e.g. 512/768/custom) to keep more spatial detail at the cost of higher peak VRAM. On some pipelines the reconstructed detail can come out broken; if you see corrupted output, disable the downscale step so the input is processed at its native resolution:
 
 ```
 docker run -v /[Your local path to store models]:/grpc-models -p 7859:7859 --gpus all drawthingsai/draw-things-grpc-server-cli:latest gRPCServerCLI /grpc-models --no-seedvr2-downscale
+```
+
+```
+docker run -v /[Your local path to store models]:/grpc-models -p 7859:7859 --gpus all drawthingsai/draw-things-grpc-server-cli:latest gRPCServerCLI /grpc-models --seedvr2-downscale-width 512
 ```
 
 # Getting Started for Development
