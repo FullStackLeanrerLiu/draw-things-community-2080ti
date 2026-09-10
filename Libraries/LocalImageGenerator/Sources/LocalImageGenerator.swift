@@ -5085,6 +5085,32 @@ extension LocalImageGenerator {
     }
   }
 
+  // P0: force tiled decode/encode at high native resolution so single-pass DiT/VAE does not OOM
+  // on SM75 (11GB). The seedvr2 upscale path runs the DiT at the *full result-size* latent when
+  // downscale is disabled; past a moderate latent-pixel threshold tiling must be guaranteed
+  // regardless of the user-facing toggle. Tile sizes default via GenerationConfiguration (decode
+  // 640/640/128, diffusion 1024/1024/128), which remain usable when tiling is force-enabled.
+  private func forcedHighResTiling(
+    pixelWidth: Int, pixelHeight: Int, modelVersion: ModelVersion, imageScaleFactor: Int
+  ) -> (forceTiledDecode: Bool, forceTiledDiffusion: Bool) {
+    let scale: Int
+    switch modelVersion {
+    case .hiDreamO1, .ltx2, .ltx2_3:
+      scale = 32  // 32× latent scale
+    case .wan22_5b:
+      scale = 16  // 16× latent scale
+    default:
+      scale = 8  // 8× latent scale (seedvr2, flux, qwen, sd3, ...)
+    }
+    let latentW = max(1, pixelWidth / scale / max(1, imageScaleFactor))
+    let latentH = max(1, pixelHeight / scale / max(1, imageScaleFactor))
+    // ≈1024×512 result (latent 128×64 = 8192) and above needs tiling on an 11GB SM75 card.
+    if latentW * latentH >= 8192 {
+      return (true, true)
+    }
+    return (false, false)
+  }
+
   // This generate image variations with text as modifier and strength.
   private func generateImageOnly(
     _ image: Tensor<FloatType>, scaleFactor imageScaleFactor: Int, depth: Tensor<FloatType>?,
@@ -5181,13 +5207,16 @@ extension LocalImageGenerator {
       guard ModelZoo.isCompatibleRefiner(modelVersion, refinerVersion: version) else { return nil }
       return version
     }
+    let forcedTiling = forcedHighResTiling(
+      pixelWidth: image.shape[2], pixelHeight: image.shape[1], modelVersion: modelVersion,
+      imageScaleFactor: imageScaleFactor)
     let tiledDecoding = TiledConfiguration(
-      isEnabled: configuration.tiledDecoding,
+      isEnabled: configuration.tiledDecoding || forcedTiling.forceTiledDecode,
       tileSize: .init(
         width: Int(configuration.decodingTileWidth), height: Int(configuration.decodingTileHeight)),
       tileOverlap: Int(configuration.decodingTileOverlap))
     let tiledDiffusion = TiledConfiguration(
-      isEnabled: configuration.tiledDiffusion,
+      isEnabled: configuration.tiledDiffusion || forcedTiling.forceTiledDiffusion,
       tileSize: .init(
         width: Int(configuration.diffusionTileWidth), height: Int(configuration.diffusionTileHeight)
       ), tileOverlap: Int(configuration.diffusionTileOverlap))
