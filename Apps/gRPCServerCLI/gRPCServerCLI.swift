@@ -508,10 +508,18 @@ struct gRPCServerCLI: ParsableCommand {
       DeviceCapability.memoryCapacity = .medium  // This will trigger logic to offload some weights to CPU during inference.
       if effectiveWeightsCache == 0 {
         let physicalGiB = Double(ProcessInfo.processInfo.physicalMemory) / Double(1_024 * 1_024 * 1_024)
-        effectiveWeightsCache = max(0, Int(min(min(physicalGiB * 0.5, max(0, physicalGiB - 8)), 40)))
+        // RAM-driven budget: keep decompressed weights resident across requests (the cache evicts
+        // smallest-first when over quota).
+        let ramQuota = Int(min(physicalGiB * 0.5, max(0, physicalGiB - 8)))
+        // VRAM safety margin: the decompressed weights must also fit the GPU working set without
+        // starving activations. Deploy target is 2080Ti 11GB, so reserve ~2GB for the
+        // compute graph and cap the auto default accordingly. Bounded by a 40 GiB hard ceiling.
+        let vramSafeQuota = 9  // 11 GiB (2080Ti) - 2 GiB safety margin; tighten on smaller GPUs
+        effectiveWeightsCache = max(0, min(min(ramQuota, 40), vramSafeQuota))
         print(
           "CPU offload without --weights-cache: auto-enabling a \(effectiveWeightsCache) GiB weights cache "
-            + "for a \(physicalGiB) GiB machine so decompressed weights stay resident across requests.")
+            + "for a \(physicalGiB) GiB machine, capped by a \(vramSafeQuota) GiB VRAM safety margin "
+            + "so decompressed weights stay resident across requests without starving the GPU.")
       }
     }
     if freadPreferred {

@@ -5579,8 +5579,9 @@ extension LocalImageGenerator {
         graph.variable(image), scaleFactor: imageScaleFactor)
       // SeedVR2-as-upscaler: the working condition is a small intermediate image (width the 1/4
       // downscale, floored to the configured target width, height scaled to keep aspect, both
-      // aligned to 64). It is encoded, then its latent is upsampled back to the result-size
-      // latent for the DiT.
+      // aligned to 64). It is upscaled back up in *pixel space* to the result size and encoded once
+      // at that size, so the DiT restores detail at full resolution while the condition latent stays
+      // in a valid VAE distribution (no latent-space interpolation artifacts).
       let workingImage: DynamicGraph.Tensor<FloatType>
       if isSeedVR2DownscaleEnabled && DeviceCapability.seedVR2DownscaleWidth > 0 {
         let originalWidth = image.shape[2]
@@ -5680,6 +5681,18 @@ extension LocalImageGenerator {
       } else {
         firstPassImage = workingImage
       }
+      if isSeedVR2DownscaleEnabled {
+        // Pixel-domain upscale of the low-res condition to the result size, then re-encode once at
+        // that size. Interpolating in *pixel space* keeps the VAE latent in a valid distribution,
+        // unlike bilinear-upsampling the latent directly (which produced corrupted output on SM75).
+        let conditionH = startHeight * startScaleFactor  // == image.shape[1]
+        let conditionW = startWidth * startScaleFactor   // == image.shape[2]
+        if firstPassImage.shape[1] != conditionH || firstPassImage.shape[2] != conditionW {
+          firstPassImage = Upsample(
+            .bilinear, widthScale: Float(conditionW) / Float(firstPassImage.shape[2]),
+            heightScale: Float(conditionH) / Float(firstPassImage.shape[1]))(firstPassImage)
+        }
+      }
       var batchSize = (batchSize, 0)
       switch modelVersion {
       case .svdI2v:
@@ -5716,23 +5729,6 @@ extension LocalImageGenerator {
             encoder: modelPreloader.retrieveFirstStageEncoder(
               firstStage: firstStage, scale: imageScale), cancellation: cancellation),
           firstStage: firstStage, scale: imageScale)
-        // SeedVR2-as-upscaler: the working condition is a small intermediate image. Diffusion runs
-        // at the result-size latent (startHeight/startWidth), so upscale the condition latent to
-        // that size before it is sliced into maskedImage and combined into x_T.
-        if isSeedVR2DownscaleEnabled {
-          let sShape = sample.shape
-          if sShape[1] != startHeight || sShape[2] != startWidth {
-            sample = Upsample(
-              .bilinear, widthScale: Float(startWidth) / Float(sShape[2]),
-              heightScale: Float(startHeight) / Float(sShape[1]))(sample)
-          }
-          let eShape = encodedImage.shape
-          if eShape[1] != startHeight || eShape[2] != startWidth {
-            encodedImage = Upsample(
-              .bilinear, widthScale: Float(startWidth) / Float(eShape[2]),
-              heightScale: Float(startHeight) / Float(eShape[1]))(encodedImage)
-          }
-        }
         if modifier == .inpainting {
           maskedImage = firstStage.scale(
             encodedImage[0..<imageSize, 0..<startHeight, 0..<startWidth, 0..<channels].copied())
