@@ -155,9 +155,15 @@ memory（共享显存）**，GPU 用时靠 page-fault 自动迁移，节点结�
 
 ## 5. SageAttention SM75 调优（P1）
 
-> 现状：自定义 ccv 驱动的 SageAttention 迁移，SM75 上理应比 split-cross-attention 快
-> （Triton INT8 QK + FP16 PV 理论 flops 提升约 2.3–2.4×），但实测**慢于 split**。
-> 根因大概率落在：**Triton 版本不兼容 / 量化粒度错误 / INT8 Fragment 布局未修复**。
+> **⚠️ 更正（新文档 doc_sm75_ccv_sage_att_opt.md 核对结论）**：本节早期描述基于 **Triton**
+> 实现（Ph0rk0z fork / SageAttention-SM75-path）。但 **ccv 实际用 CUTLASS 实现**（flash_attn
+> 下 `flash_fwd_int8_kernel.h` / `flash_int8_kernel_traits.h`），**不依赖 Triton** → 本节
+> 所有 "Triton 版本锁定 / 强制 Triton 路径" 项对当前 ccv 路径 **不适用（N/A）**。对应结论见
+> 新文档 §2.1 / §四；以下仅打勾已在 ccv CUTLASS 实现中落地的项。
+>
+> 现状：自定义 ccv 驱动（CUTLASS INT8 QK + FP16 PV 融合内核），SM75 上理论应比
+> split-cross-attention 快（INT8 QK flops 提升约 2.3–2.4×）。实际收益与序列长度强相关，
+> 小矩阵因固定量化开销反而更慢 -> 用 CCV_QK_ROUTE 做序列长度分档路由。
 > 基准：1024 flops 27.2→52.1；2048 30.0→71.2；4096 27.9→68.1；8192 27.7→67.6（vs xformers FP16）
 >
 > - Wan2GP Turing 端到端 \~30% / MiniMax-H3 实测 16.8%（133.37s vs 160.25s）。
@@ -173,11 +179,14 @@ memory（共享显存）**，GPU 用时靠 page-fault 自动迁移，节点结�
   （Ph0rk0z fork 的 CUDA 内核结果错误，`mean_rtol/atol` 可 >1）。
 
 - [ ] **累积器 FP32**：`pv_accum_dtype="fp32"`，FP16 累加长序列会溢出 → NaN。
+  （ccv 已落地 ✅：INT8-QK 累加器为 int32/FP32，见新文档 §2.1）
 
 - [ ] **Fragment 布局修复**：INT8 用手动 `uint32_t` 加载，**禁用** **`ldmatrix`**（`ldmatrix_m8n8x4`
   与 INT8 MMA 不兼容，实测数据错乱、画面崩坏）。用全 1 矩阵验证 fragment 布局正确性。
+  （ccv 已落地 ✅：`int8_cute_bypass_gemm` 手动 uint32_t 加载、禁 ldmatrix，见新文档 §2.1）
 
 - [ ] **Outlier Smoothing**：对 Q/K 做 mean 中心化，省略会导致量化误差放大。
+  （⚠️ 本轮评估默认关闭，仅文档记录；若加会破坏现有输出，择机单独 A/B）
 
 - [ ] **在线 Softmax**：K-tile 级在线 softmax + warp 归约（简单 dead-loop 会导致数值不稳）。
 
@@ -197,6 +206,9 @@ memory（共享显存）**，GPU 用时靠 page-fault 自动迁移，节点结�
 - [ ] Scale / Smoothing 预计算：kernel 启动前算好，避免 per-tile 重复。
 
 ### P3 与 split-cross-attention 的序列长度路由
+
+> ✅ 已落地（`CCV_QK_ROUTE`，默认关闭）：R*C ≤ 128 → 保持标准 FP16；R*C > 128 → 走
+> INT8-QK。为当前 CUTLASS 实现下"小矩阵别硬开 INT8"的显式档位开关。见新文档 §2.1/§四。
 
 | S             | 路径                              | 理由                 |
 | ------------- | ------------------------------- | ------------------ |
