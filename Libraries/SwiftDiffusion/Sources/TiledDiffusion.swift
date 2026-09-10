@@ -1,3 +1,9 @@
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
+import Darwin
+#endif
+
 public struct TiledConfiguration: Equatable {
   public struct Size: Equatable {
     public var width: Int
