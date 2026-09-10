@@ -314,9 +314,7 @@ struct gRPCServerCLI: ParsableCommand {
 
   @Option(
     name: .customLong("seedvr2-downscale-width"),
-    help:
-      "Target clamp width (pixels) for the SeedVR2 downscale step (e.g. 384/512/768/custom); "
-        + "0 disables the downscale. Under 16-GiB GPUs raise this to keep detail at the cost of VRAM."
+    help: "Target clamp width (pixels) for the SeedVR2 downscale step (e.g. 384/512/768/custom); 0 disables the downscale. Under 16-GiB GPUs raise this to keep detail at the cost of VRAM."
   )
   var seedVR2DownscaleWidth: Int = 384
 
