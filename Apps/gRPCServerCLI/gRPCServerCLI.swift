@@ -309,7 +309,7 @@ struct gRPCServerCLI: ParsableCommand {
   @Flag(help: "Disable FlashAttention.")
   var noFlashAttention = false
 
-  @Flag(help: "Disable the SeedVR2 downscale-to-384 step when SeedVR2 is used as a master upscaler.")
+  @Flag(name: .customLong("no-seedvr2-downscale"), help: "Disable the SeedVR2 downscale-to-384 step when SeedVR2 is used as a master upscaler.")
   var noSeedVR2Downscale = false
 
   @Option(name: .shortAndLong, help: "The weights cache size in GiB.")
