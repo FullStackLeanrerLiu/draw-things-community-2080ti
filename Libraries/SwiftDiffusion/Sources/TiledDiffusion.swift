@@ -17,6 +17,16 @@ public struct TiledConfiguration: Equatable {
   }
 }
 
+/// Cosine (sin-pi) cross-fade weight across a padded tile region.  Zero at both
+/// edges, peak at the centre — a smoother seam than the linear tent
+/// (`min(j-start, end-j)`), used for tiled VAE decode / generation soft fusion.
+@inline(__always)
+func cosineFadeWeight(position: Int, start: Int, end: Int) -> Float {
+  let span = max(1, end - start)
+  let x = Float(min(max(position - start, 0), span)) / Float(span)
+  return sinf(.pi * x)
+}
+
 func paddedTileStartAndEnd(iOfs: Int, length: Int, tileSize: Int, tileOverlap: Int) -> (
   paddedStart: Int, paddedEnd: Int
 ) {
@@ -51,7 +61,8 @@ func xyTileWeightsAndIndexes(
     if j >= inputStartY1Pad && j < inputEndY1Pad {
       weightAndIndex.append(
         (
-          weight: Float(min(j - inputStartY1Pad, inputEndY1Pad - j)), index: y1,
+          weight: cosineFadeWeight(position: j, start: inputStartY1Pad, end: inputEndY1Pad),
+          index: y1,
           offset: j - inputStartY1Pad
         ))
     }
@@ -63,7 +74,8 @@ func xyTileWeightsAndIndexes(
       if j >= inputStartY2Pad && j < inputEndY2Pad {
         weightAndIndex.append(
           (
-            weight: Float(min(j - inputStartY2Pad, inputEndY2Pad - j)), index: y1 + 1,
+            weight: cosineFadeWeight(position: j, start: inputStartY2Pad, end: inputEndY2Pad),
+            index: y1 + 1,
             offset: j - inputStartY2Pad
           ))
       }
@@ -77,7 +89,8 @@ func xyTileWeightsAndIndexes(
       if j >= inputStartY0Pad && j < inputEndY0Pad {
         weightAndIndex.append(
           (
-            weight: Float(min(j - inputStartY0Pad, inputEndY0Pad - j)), index: y1 - 1,
+            weight: cosineFadeWeight(position: j, start: inputStartY0Pad, end: inputEndY0Pad),
+            index: y1 - 1,
             offset: j - inputStartY0Pad
           ))
       }
@@ -105,7 +118,8 @@ func xyTileWeightsAndIndexes(
     if i >= inputStartX1Pad && i < inputEndX1Pad {
       weightAndIndex.append(
         (
-          weight: Float(min(i - inputStartX1Pad, inputEndX1Pad - i)), index: x1,
+          weight: cosineFadeWeight(position: i, start: inputStartX1Pad, end: inputEndX1Pad),
+          index: x1,
           offset: i - inputStartX1Pad
         ))
     }
@@ -117,7 +131,8 @@ func xyTileWeightsAndIndexes(
       if i >= inputStartX2Pad && i < inputEndX2Pad {
         weightAndIndex.append(
           (
-            weight: Float(min(i - inputStartX2Pad, inputEndX2Pad - i)), index: x1 + 1,
+            weight: cosineFadeWeight(position: i, start: inputStartX2Pad, end: inputEndX2Pad),
+            index: x1 + 1,
             offset: i - inputStartX2Pad
           ))
       }
@@ -131,7 +146,8 @@ func xyTileWeightsAndIndexes(
       if i >= inputStartX0Pad && i < inputEndX0Pad {
         weightAndIndex.append(
           (
-            weight: Float(min(i - inputStartX0Pad, inputEndX0Pad - i)), index: x1 - 1,
+            weight: cosineFadeWeight(position: i, start: inputStartX0Pad, end: inputEndX0Pad),
+            index: x1 - 1,
             offset: i - inputStartX0Pad
           ))
       }
