@@ -669,12 +669,16 @@ extension ModelPreloader {
       }
       if firstStageDecoder == nil {
         // Configuration only works for SDXL / SD v1.x / SSD-1B
+        // SeedVR2-as-master-upscaler decodes at the full result-resolution latent, which blows past
+        // the VRAM of budget GPUs. The tile enable flag comes from the client (default off), so force
+        // it on for seedvr2 so the decoder tiles instead of decoding the whole latent at once.
+        let seedvr2 = modelVersion == .seedvr2_3b || modelVersion == .seedvr2_7b
         let decodingTileSize = (
           width: min(tiledDecoding.tileSize.width * 8, startWidth),
           height: min(tiledDecoding.tileSize.height * 8, startHeight)
         )
         let tiledDecodingIsEnabled =
-          tiledDecoding.isEnabled
+          (seedvr2 || tiledDecoding.isEnabled)
           && (startWidth > decodingTileSize.width || startHeight > decodingTileSize.height)
         let startWidth = tiledDecodingIsEnabled ? decodingTileSize.width : startWidth
         let startHeight = tiledDecodingIsEnabled ? decodingTileSize.height : startHeight
@@ -703,11 +707,13 @@ extension ModelPreloader {
         firstStageDecoderTiledDecoding = tiledDecoding
       }
       if firstStageEncoder == nil {
+        let seedvr2Encoder = modelVersion == .seedvr2_3b || modelVersion == .seedvr2_7b
+        let tileEnabled = seedvr2Encoder || tiledDiffusion.isEnabled
         let startHeight =
-          tiledDiffusion.isEnabled
+          tileEnabled
           ? min(tiledDiffusion.tileSize.height * 8, startHeight) : startHeight
         let startWidth =
-          tiledDiffusion.isEnabled ? min(tiledDiffusion.tileSize.width * 8, startWidth) : startWidth
+          tileEnabled ? min(tiledDiffusion.tileSize.width * 8, startWidth) : startWidth
         let externalOnDemand = externalOnDemand(
           version: modelVersion, scale: imageScale, variant: .autoencoder, injectedControls: 0)
         let x = graph.variable(

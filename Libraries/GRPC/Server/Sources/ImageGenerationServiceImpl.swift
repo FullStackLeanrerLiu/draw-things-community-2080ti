@@ -215,34 +215,6 @@ public final class ImageGenerationServiceImpl: ImageGenerationServiceProvider {
     let responseCompression = responseCompression.load(ordering: .acquiring)
     let queue = usesBackupQueue ? backupQueue : queue
     let configuration = GenerationConfiguration.from(data: request.configuration)
-    // SeedVR2-as-master-upscaler runs at the full target resolution, which blows past the 11-GiB
-    // VRAM of budget GPUs unless tiled decoding/diffusion is enabled. The tile enable flags come
-    // from the client and default to off; force them on here so high-res upscaling does not OOM.
-    if configuration.model.contains("seedvr2") {
-      if !configuration.tiledDecoding {
-        configuration.tiledDecoding = true
-      }
-      // FirstStage derives pixel tile = tileSize * (64/scaleFactor); for seedvr2 that is tileSize*8.
-      // The latent of a 2K-4K upscale is ~256-512, so a tile of 48 keeps the 384px equivalent safely
-      // below the latent width and actually triggers tiling (48*8=384 < 256..512) instead of filling.
-      if configuration.decodingTileWidth == 0 || configuration.decodingTileHeight == 0 {
-        configuration.decodingTileWidth = 48
-        configuration.decodingTileHeight = 48
-        if configuration.decodingTileOverlap == 0 {
-          configuration.decodingTileOverlap = 16
-        }
-      }
-      if !configuration.tiledDiffusion {
-        configuration.tiledDiffusion = true
-      }
-      if configuration.diffusionTileWidth == 0 || configuration.diffusionTileHeight == 0 {
-        configuration.diffusionTileWidth = 48
-        configuration.diffusionTileHeight = 48
-        if configuration.diffusionTileOverlap == 0 {
-          configuration.diffusionTileOverlap = 16
-        }
-      }
-    }
     if let serverConfigurationRewriter = serverConfigurationRewriter {
       let cancelFlag = ManagedAtomic<Bool>(false)
       let successFlag = ManagedAtomic<Bool>(false)
