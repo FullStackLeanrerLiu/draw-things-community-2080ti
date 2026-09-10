@@ -179,6 +179,12 @@ For RTX 20xx graphics cards, you need to disable FlashAttention:
 docker run -v /[Your local path to store models]:/grpc-models -p 7859:7859 --gpus all drawthingsai/draw-things-grpc-server-cli:latest gRPCServerCLI /grpc-models --no-flash-attention
 ```
 
+When SeedVR2 (`seedvr2_3b` / `seedvr2_7b`) is used as a master upscaler, the server downsamples the input to ~height/4×width/4 (width clamped to [384,512]) before generation, then upscales the latent back to the full result resolution. On some pipelines this reconstructed detail can come out broken. If you see corrupted output, disable the downscale step so the input is processed at its native resolution:
+
+```
+docker run -v /[Your local path to store models]:/grpc-models -p 7859:7859 --gpus all drawthingsai/draw-things-grpc-server-cli:latest gRPCServerCLI /grpc-models --no-seedvr2-downscale
+```
+
 # Getting Started for Development
 
 We use [Bazel](https://bazel.build/) as our main build system. You can build components either on Linux or on macOS. On macOS, you need to have Xcode installed. On Linux, depending on whether you have NVIDIA CUDA-compatible GPU, the setup can be different.
