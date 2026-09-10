@@ -5128,7 +5128,8 @@ extension LocalImageGenerator {
     // the result-size latent so the DiT reconstructs detail at full resolution. Only active at
     // imageScaleFactor == 1, and skipped for editing (local-edit) modifiers.
     let isSeedVR2DownscaleEnabled =
-      (modelVersion == .seedvr2_3b || modelVersion == .seedvr2_7b) && imageScaleFactor == 1
+      DeviceCapability.isSeedVR2DownscaleEnabled
+      && (modelVersion == .seedvr2_3b || modelVersion == .seedvr2_7b) && imageScaleFactor == 1
       && modifier != .editing
     let (
       qkNorm, dualAttentionLayers, distilledGuidanceLayers, activationQkScaling,
