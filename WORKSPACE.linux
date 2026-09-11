@@ -3,18 +3,20 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:local.bzl", "local_repository")
 
 # ccv (with sm75/Turing support) is consumed as @ccv//lib:ccv. Built from the
-# fork's sm75-support branch (62cc1c83, FP16 fused flash-attention kernels +
+# fork's sm75-support branch (65dbaee9, FP16 fused flash-attention kernels +
 # SageAttention-style INT8-QK / INT4-QK fused forward kernels for RTX 2080Ti,
 # CUDA13 managed-memory API compat, cufileread GDS probe, an fp16-SageAttention
 # tile variant (CCV_SEGA_MODE=fp16), plus opt-in W8A8 INT8 GEMM (CCV_GEMM_INT8),
 # an INT8-QK size gate (CCV_QK_MIN_TILE) and a sequence-length router
 # (CCV_QK_ROUTE). INT8-QK uses per-row forward scales (not per-tile) so outliers
-# do not corrupt quantized scores. Default SDPA path on Turing is standard FP16
-# fused; all INT8/quantized paths are experimental, engaged only via env switches).
+# do not corrupt quantized scores; dequant applies each thread's two distinct K
+# column scales to the two mma.m8n8k16 accumulators. Default SDPA path on Turing
+# is standard FP16 fused; all INT8/quantized paths are experimental, engaged
+# only via env switches).
 # Pulled directly from the fork via git_repository so the community can build.
 git_repository(
     name = "ccv",
-    commit = "62cc1c83",
+    commit = "65dbaee9",
     remote = "https://github.com/FullStackLeanrerLiu/ccv.git",
 )
 
