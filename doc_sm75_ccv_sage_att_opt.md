@@ -41,17 +41,25 @@ CUTLASS 内核中实现等效功能，见 `flash_fwd_int8_kernel.h` / `flash_int
 
 ***
 
-### 2.2 vLLM INT8 W8A8 GEMM（4 个 M 配置）❌ 外部仓库资产，本工作区无
+### 2.2 vLLM INT8 W8A8 GEMM（4 个 M 配置）⚠️ 资产已随 CUTLASS 3.x 重构，原 SM75 路径失效
+
+> **🔎 原始库核对（2026-09-11 · vllm main，commit 392db567)**：
+>
+> - ❌ 两个原路径均 **404**：`csrc/cutlass_extensions/cutlass_w8a8/scaled_mm_c2x_sm75_dispatch.cuh`、`scaled_mm_c2x.cuh`。`csrc/cutlass_extensions/` 目录已被移除。
+>
+> - ⚠️ W8A8 CUTLASS 现迁至 `csrc/quantization/w8a8/`（含 `fp8/` 与 `cutlass/`），**CUTLASS 2.x→3.x** 架构感知调度，无 SM75 专属 M-tile 枚举。
+>
+> - ❌ 下表 4 档 SM75 配置（`sm75_config_M32/M64/default/M256` 及 TBS/WBS/INS 参数）已**全部失效/删除**。
+>
+> - ⚠️ `CMakeLists.txt` 的 `CUDA_SUPPORTED_ARCHS` 仍保留 "7.5"，但 SM75 专属 W8A8 kernel 已删除，由 SM80+ kernel 覆盖。
+>
+> **结论：SM75(2080Ti) 移植此资产需按 CUTLASS 3.x 重写；原文档的 4 档 M-tile 参数不可用。**
 
 **仓库**：`vllm`
 
-**可移植文件**：
+**迁移目标（更新后）**：`csrc/quantization/w8a8/cutlass/`（CUTLASS 3.x）。原 `scaled_mm_c2x_sm75_dispatch.cuh / scaled_mm_c2x.cuh` 仅为历史记录，不再可复制。
 
-- `csrc/cutlass_extensions/cutlass_w8a8/scaled_mm_c2x_sm75_dispatch.cuh`：4 个 Gemm 配置的调度逻辑
-
-- `csrc/cutlass_extensions/cutlass_w8a8/scaled_mm_c2x.cuh`：Gemm 模板定义
-
-**4 个配置的具体参数**：
+**旧记录（已失效，保留供历史参考）**：
 
 | 配置                    | M 范围                 | ThreadblockShape | WarpShape | InstructionShape | 共享内存  |
 | :-------------------- | :------------------- | :--------------- | :-------- | :--------------- | :---- |
@@ -60,49 +68,65 @@ CUTLASS 内核中实现等效功能，见 `flash_fwd_int8_kernel.h` / `flash_int
 | `sm75_config_default` | (64, 128] 或 (256, ∞) | 128×128×64       | 64×64×64  | 8×8×16           | 32768 |
 | `sm75_config_M256`    | (128, 256]           | 128×128×128      | 64×64×64  | 8×8×16           | 65536 |
 
-**移植方式**：
-
-1. 复制 `scaled_mm_c2x_sm75_dispatch.cuh` 和 `scaled_mm_c2x.cuh`。
-2. 将 vLLM 的 `torch::Tensor` 参数替换为 CCV 的 `ccv_nnc_tensor_t*`。
-3. 在 CCV 的 GEMM 调度中，根据 M 选择对应的配置。
-
-**关键点**：所有配置均使用 `cutlass::arch::Sm75` 和 `InstructionShape = GemmShape<8, 8, 16>`。
+**关键点（对本仓库的参考意义）**：`InstructionShape = GemmShape<8, 8, 16>`（即 `mma.s8.m8n8k16`）与 ccv 现有 INT8 QK 用同一 Turing INT8 原子；但 ccv 的 INT8 GEMM 采用 **cuBLAS INT8** 路径（`CCV_GEMM_INT8`，见 §4），并非 vLLM 的 CUTLASS 模板。
 
 ***
 
-### 2.3 LMDeploy KV Cache INT8 量化 ❌ 外部仓库资产，本工作区无（P3 记录项）
+### 2.3 LMDeploy KV Cache INT8 量化 ⚠️ 资产仍在，但文件改名 + 量化为非对称 min-max
+
+> **🔎 原始库核对（2026-09-11 · InternLM/lmdeploy main)**：
+>
+> - ✅ `src/turbomind/kernels/attention/quantization.h` **仍存在**。
+>
+> - ⚠️ 原 `attention_128_f16_sm75.cu` 已**改名移位** → `src/turbomind/kernels/attention/kernel/attention_sm75_128.cu`（同族 `_64/_256/_576`、`decoding_sm75_*`）。
+>
+> - ✅ SM75(Turing) 仍受支持：以 `arch::Sm75` + `Mainloop<arch::Sm70,...>` 实例化编译，未升到 SM80+。
+>
+> - ⚠️ **量化公式变了**：当前 `warp_stats` 用**非对称 min-max + 零点**：`scale=(max-min)/(2^n-1)`、`zero=min`；量化 `(src-zero)*inv_scale`，反量化 `q*scale+zero`。**不再是文档所写的** **`scale=max(|K|)/127`（对称）**。
 
 **仓库**：`lmdeploy`
 
-**可移植文件**：
+**可移植文件（更新后）**：
 
-- `src/turbomind/kernels/attention/attention_128_f16_sm75.cu`：Turing 专用注意力内核
+- `src/turbomind/kernels/attention/kernel/attention_sm75_128.cu`：Turing 专用注意力内核（原 `attention_128_f16_sm75.cu`）
 
 - `src/turbomind/kernels/attention/quantization.h`：量化/反量化内核
 
-**核心实现**：
+**核心实现（更新后）**：
 
 - per-head、per-token 非对称量化
 
-- 量化：`scale = max(abs(K)) / 127`，`K_int8 = round(K / scale)`
+- 量化：`scale = (max-min)/127`，`zero = min`；`K_int8 = round((K-zero)/scale)`
 
-- 反量化：`K_fp16 = K_int8 * scale`
+- 反量化：`K_fp16 = K_int8 * scale + zero`
 
 **移植方式**：将量化/反量化内核提取为独立的 CCV 算子（`ccv_nnc_kv_quantize` / `ccv_nnc_kv_dequantize`），在 Attention 算子的预处理/后处理阶段调用。
 
 ***
 
-### 2.4 vLLM Marlin（W4A16）❌ 外部仓库资产，本工作区无
+### 2.4 vLLM Marlin（W4A16）✅ 资产存在且仍支持 SM75，但文件改名移位
+
+> **🔎 原始库核对（2026-09-11 · vllm main)**：
+>
+> - ⚠️ Marlin 代码已重构进 `csrc/libtorch_stable/quantization/marlin/`（旧 `csrc/quantization/marlin/` 现仅含 `utils.cuh`、`w8a8`）。
+>
+> - ⚠️ 文件映射：`marlin.cu` ✅、`marlin_template.h` ✅ 均存在；但文档写的 `marlin_mm.cuh` **不存在**，实际是 `marlin.cuh`（另有 `marlin_mma.h`、`marlin_dtypes.cuh`）。
+>
+> - ✅ **SM75 支持属实**：PR #45375 已于 2026-06-23 合入，`get_min_capability()` 由 80 降至 **75**；当前主干仍支持 SM75——`marlin.cu` 第48行 `#if __CUDA_ARCH__ < 750` 才报错；`marlin.cuh` 第52行 `#if __CUDA_ARCH__ < 800` 提供 SM75 无 `cp.async` 的回退路径。未退回 SM80+。
+>
+> - ✅ W4A16 语义描述准确：权重 4-bit、激活 FP16、不依赖 INT8、靠减少显存带宽提速。
 
 **仓库**：`vllm`
 
-**可移植文件**：
+**可移植文件（更新后）**（均在 `csrc/libtorch_stable/quantization/marlin/`）：
 
-- `csrc/quantization/marlin/marlin.cu`：Marlin 内核入口
+- `marlin.cu`：Marlin 内核入口
 
-- `csrc/quantization/marlin/marlin_mm.cuh`：矩阵乘法实现
+- `marlin.cuh`（原文档误作 `marlin_mm.cuh`）：矩阵乘法实现
 
-- `csrc/quantization/marlin/marlin_template.h`：模板定义
+- `marlin_template.h`：模板定义
+
+（另含 `marlin_mma.h`、`marlin_dtypes.cuh`）
 
 **核心实现**：
 
@@ -114,39 +138,49 @@ CUTLASS 内核中实现等效功能，见 `flash_fwd_int8_kernel.h` / `flash_int
 
 **移植方式**：
 
-1. 复制 Marlin 的 `.cu`/`.cuh` 文件。
+1. 复制上述 `.cu`/`.cuh` 文件。
 2. 实现 W4A16 权重的加载和反量化逻辑。
 3. 适配 CCV 的 tensor 抽象。
 
-**注意**：vLLM PR #45375 将 `get_min_capability()` 从 80 降至 **75**，确认 Marlin 支持 SM75。
+**注意**：vLLM PR #45375 将 `get_min_capability()` 从 80 降至 **75**，确认 Marlin 支持 SM75（**已核对属实**）。
 
 ***
 
-### 2.5 FlashInfer 块稀疏注意力 ❌ 外部仓库资产，本工作区无，且有 smem 溢出风险
+### 2.5 FlashInfer 块稀疏注意力 ⚠️ 资产存在且 SM75+，但"两阶段 INT8 / LDGSTS / SM80 下限"为误记
+
+> **🔎 原始库核对（2026-09-11 · flashinfer-ai/flashinfer main)**：
+>
+> - ✅ `include/flashinfer/attention/` 目录**仍存在且活跃**（decode.cuh、prefill.cuh、mla.cuh、hopper/、sm120/、blackwell/ 等 30+ 项），未全迁到 csrc/。
+>
+> - ✅ **块稀疏注意力功能属实**：存在 `BlockSparseAttentionWrapper`、`block_sparse_attention`、`bsa_attn_sm1xx_*`，基于 block-mask（BSR，块稀疏行）表示稀疏。
+>
+> - ❌ **"两阶段 64×64 粗粒度 FP16 打分 + 高分段 INT8 MMA"为误记**：FlashInfer 块稀疏注意力用 FP16/BF16/FP8，**无 INT8 两阶段打分**。
+>
+> - ❌ **"LDGSTS(128B) 从稀疏 KV-Cache 加载"为误记**：稀疏 KV 走常规 global/smem 访问。
+>
+> - ⚠️ **"最低 SM80"已过时**：官方 README 明确 "Support for SM75 (Turing) and later（through Blackwell）"，GPU 表第一项即 Turing SM7.5；SM80 仅是部分新内核（如 decode\_mla\_cute\_sm80）的基准。
 
 **仓库**：`flashinfer`
 
 **可移植文件**：
 
-- `include/flashinfer/attention/` 下的 CUDA 模板
+- `include/flashinfer/attention/` 下的 CUDA 模板（BSR 块稀疏内核，如 `bsa_attn_sm1xx_*`）
 
 - 块稀疏注意力的调度逻辑
 
-**核心实现**：
+**核心实现（更新后）**：
 
-- 先算粗粒度（64×64）块级分数（FP16）
+- 基于 BSR block-mask 的块稀疏注意力（FP16/BF16/FP8 精度，**无 INT8 两阶段打分**）
 
-- 只对高分段执行完整 INT8 MMA
-
-- 使用 `LDGSTS` 指令（128B 宽度）从稀疏 KV-Cache 加载数据
+- 稀疏 KV-Cache 常规 global/smem 访问（**无 LDGSTS-128B 方案**）
 
 **移植方式**：
 
-1. 提取块稀疏注意力的 CUDA 内核。
+1. 提取块稀疏注意力（BSR）的 CUDA 内核。
 2. 适配 CCV 的调度接口——FlashInfer 使用 `paged_kv_t` 数据结构，CCV 需提供等效的 KV Cache 视图。
 3. **注意共享内存上限**：Turing 的 64 KB/SM 限制需降低 tile 尺寸。
 
-**风险**：FlashInfer 在 vLLM 中设置了 SM80 最低要求，因为 Turing 上存在 smem 溢出问题。CCV 实现时需特别小心。
+**风险**：FlashInfer 虽声明支持 SM75+，但部分新内核以 SM80 为基准（smem/tile 更大），CCV 在 Turing 侧落地时仍需压到 64KB/SM 以内、避免闪存溢出。
 
 ***
 

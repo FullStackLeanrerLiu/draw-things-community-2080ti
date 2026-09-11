@@ -272,7 +272,10 @@ public struct DeviceCapability {
   }()
   public static let isMaxPerformance: Bool = {
     #if !canImport(Metal)
-      return true
+      // On Linux + 2080Ti 11GB CPU-offload target: externalOnDemand needs isMaxPerformance=false
+      // to trigger block-level disk-on-demand for large models (zImage/seedvr2) avoiding OOM.
+      // The 11GB physical RAM threshold was for Apple iGPU, Linux has 30+GB RAM but only 11GB VRAM.
+      return false
     #else
       let physicalMemory = ProcessInfo.processInfo.physicalMemory
       return physicalMemory >= 11_811_160_064  // This is 11 * 1024 * 1024 * 1024.
@@ -280,7 +283,7 @@ public struct DeviceCapability {
   }()
   public static let isUltraPerformance: Bool = {
     #if !canImport(Metal)
-      return true
+      return false
     #else
       let physicalMemory = ProcessInfo.processInfo.physicalMemory
       return physicalMemory >= 24_696_061_952  // This is 23 * 1024 * 1024 * 1024.
